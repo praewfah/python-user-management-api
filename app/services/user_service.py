@@ -28,6 +28,13 @@ class UserService:
         return user
 
     def create_user(self, payload: UserCreate):
+        existing_user = self.repository.get_by_email(email=payload.email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already exists in the system",
+            )
+
         try:
             return self.repository.create_user(
                 name=payload.name,
@@ -69,3 +76,15 @@ class UserService:
             return {"status": "failed", "message": "User already deleted"}
         self.repository.soft_delete_user(user)
         return {"status": "success"}
+
+    def restore_user_by_email(self, email: str):
+        normalized_email = email.strip().lower()
+        user = self.repository.get_by_email(email=normalized_email)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if user.deleted_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User is not deleted",
+            )
+        return self.repository.restore_user(user)

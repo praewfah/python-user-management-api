@@ -42,3 +42,11 @@ def update_user(user_id: int, payload: UserUpdate, service: UserService = Depend
 @router.delete("/{user_id}")
 def delete_user(user_id: int, service: UserService = Depends(get_user_service)):
     return service.delete_user(user_id=user_id)
+
+
+@router.post("/restore", response_model=UserResponse)
+def restore_user(
+    email: str = Query(..., min_length=3, max_length=255),
+    service: UserService = Depends(get_user_service),
+):
+    return service.restore_user_by_email(email=email)

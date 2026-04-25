@@ -14,6 +14,7 @@ Stack: FastAPI + SQLAlchemy + PostgreSQL + Alembic + Docker
   - `email` ต้องรูปแบบถูกต้อง + ไม่ซ้ำ
   - `name` และ `avatarUrl` ห้ามว่าง
 - soft delete (`deleted_at`) 
+- restore user ด้วย `email` (`POST /api/user/restore?email=...`)
 
 ## Project Structure
 
@@ -57,6 +58,7 @@ uvicorn app.main:app --reload
 - `POST /api/user`
 - `PUT /api/user/{userId}`
 - `DELETE /api/user/{userId}`
+- `POST /api/user/restore?email={email}`
 
 ### Pagination Response Shape
 
@@ -84,6 +86,12 @@ uvicorn app.main:app --reload
 - ลบครั้งแรก: `{ "status": "success" }`
 - ลบซ้ำ/ไม่พบ: `{ "status": "failed", "message": ... }`
 
+## Restore Behavior
+
+- restore สำเร็จผ่าน `POST /api/user/restore?email={email}`: คืนข้อมูล user เดิม
+- ไม่พบ email ในระบบ: `404 User not found`
+- พบ user แต่ยังไม่ถูกลบ: `409 User is not deleted`
+
 ## Error Handling
 
 - `422` invalid input
@@ -106,6 +114,7 @@ uvicorn app.main:app --reload
 - invalid email / invalid payload shape
 - pagination
 - delete ซ้ำ
+- restore user by email
 - pagination metadata correctness
 - search policy (`q` สั้นกว่า 3 ตัว และ contains search เมื่อ `q` ยาวพอ)
 
@@ -157,7 +166,10 @@ curl -i "http://127.0.0.1:8000/api/user?start=0&limit=2"
 # 5) soft delete behavior (replace {id} with real id)
 curl -i -X DELETE http://127.0.0.1:8000/api/user/{id}
 
-# 6) automated tests
+# 6) restore by email (replace with deleted user's email)
+curl -i -X POST "http://127.0.0.1:8000/api/user/restore?email=alice@example.com"
+
+# 7) automated tests
 python3 -m pytest -q
 ```
 
@@ -172,9 +184,10 @@ python3 -m pytest -q
 | 3 | Validation error | [docs/screenshot/03-cli-create-user-validation-error.png](docs/screenshot/03-cli-create-user-validation-error.png) | invalid email -> expected `422`, actual `422` |
 | 4 | List + pagination | [docs/screenshot/04-cli-list-pagination.png](docs/screenshot/04-cli-list-pagination.png) | `start=0&limit=2` -> expected `items + total/page/total_pages`, actual matched |
 | 5 | Soft delete behavior | [docs/screenshot/05-cli-delete-soft-delete.png](docs/screenshot/05-cli-delete-soft-delete.png) | delete same id twice -> expected success then failed, actual matched |
-| 6 | Automated tests | [docs/screenshot/06-cli-test-suite-pass.png](docs/screenshot/06-cli-test-suite-pass.png) | run `pytest` -> expected all pass, actual all pass |
-| 7 | Docker runtime | [docs/screenshot/07-cli-docker-compose-up.png](docs/screenshot/07-cli-docker-compose-up.png) | run compose -> expected services healthy, actual healthy |
-| 8 | Swagger UI (optional reference) | [docs/screenshot/Swagger-UI.png](docs/screenshot/Swagger-UI.png) | contract view for quick endpoint verification |
+| 6 | Restore by email | [docs/screenshot/06-cli-restore-by-email.png](docs/screenshot/06-cli-restore-by-email.png) | `POST /api/user/restore?email=...` -> expected `200` with restored user, actual matched |
+| 7 | Automated tests | [docs/screenshot/07-cli-test-suite-pass.png](docs/screenshot/07-cli-test-suite-pass.png) | run `pytest` -> expected all pass, actual all pass |
+| 8 | Docker runtime | [docs/screenshot/08-cli-docker-compose-up.png](docs/screenshot/08-cli-docker-compose-up.png) | run compose -> expected services healthy, actual healthy |
+| 9 | Swagger UI (optional reference) | [docs/screenshot/Swagger-UI.png](docs/screenshot/Swagger-UI.png) | contract view for quick endpoint verification |
 
 ### Video Demo 
 

@@ -68,6 +68,10 @@ class UserRepository:
     def get_by_id(self, user_id: int) -> Optional[User]:
         return self.db.get(User, user_id)
 
+    def get_by_email(self, email: str) -> Optional[User]:
+        stmt = select(User).where(User.email == email)
+        return self.db.scalar(stmt)
+
     def create_user(self, *, name: str, age: int, email: str, avatar_url: str) -> User:
         user = User(name=name, age=age, email=email, avatar_url=avatar_url)
         self.db.add(user)
@@ -87,3 +91,9 @@ class UserRepository:
     def soft_delete_user(self, user: User) -> None:
         user.deleted_at = datetime.utcnow()
         self.db.commit()
+
+    def restore_user(self, user: User) -> User:
+        user.deleted_at = None
+        self.db.commit()
+        self.db.refresh(user)
+        return user

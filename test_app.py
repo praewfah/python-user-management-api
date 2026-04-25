@@ -167,3 +167,38 @@ def test_deleted_user_not_returned_in_list(client: TestClient) -> None:
     response = client.get("/api/user")
     assert response.status_code == 200
     assert all(user["id"] != user_id for user in response.json()["items"])
+
+
+def test_create_user_conflict_when_email_belongs_to_deleted_user(client: TestClient) -> None:
+    created = client.post("/api/user", json=_user_payload(11, email="recover@example.com"))
+    assert created.status_code == 201
+    user_id = created.json()["id"]
+
+    deleted = client.delete(f"/api/user/{user_id}")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"status": "success"}
+
+    recreated = client.post("/api/user", json=_user_payload(12, email="recover@example.com"))
+    assert recreated.status_code == 409
+    assert recreated.json()["detail"] == "Email already exists in the system"
+
+
+def test_restore_user_success_and_can_be_read_again(client: TestClient) -> None:
+    created = client.post("/api/user", json=_user_payload(13, email="restore@example.com"))
+    assert created.status_code == 201
+    created_data = created.json()
+    user_id = created_data["id"]
+
+    deleted = client.delete(f"/api/user/{user_id}")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"status": "success"}
+
+    restore = client.post("/api/user/restore", params={"email": "RESTORE@example.com"})
+    assert restore.status_code == 200
+    restored_data = restore.json()
+    assert restored_data["id"] == user_id
+    assert restored_data["email"] == "restore@example.com"
+
+    get_detail = client.get(f"/api/user/{user_id}")
+    assert get_detail.status_code == 200
+    assert get_detail.json()["id"] == user_id
