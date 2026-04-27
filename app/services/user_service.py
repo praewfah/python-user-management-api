@@ -24,7 +24,10 @@ class UserService:
     def get_user_or_404(self, user_id: int):
         user = self.repository.get_active_by_id(user_id=user_id)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "User not found"},
+            )
         return user
 
     def create_user(self, payload: UserCreate):
@@ -32,7 +35,10 @@ class UserService:
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Email already exists in the system",
+                detail={
+                    "message": "Email already exists in the system",
+                    "is_deleted": existing_user.deleted_at is not None,
+                },
             )
 
         try:
@@ -45,9 +51,13 @@ class UserService:
         except IntegrityError:
             # rollback ทันทีเมื่อ unique constraint fail เพื่อให้ session กลับมาใช้งานต่อได้
             self.repository.db.rollback()
+            conflicting_user = self.repository.get_by_email(email=payload.email)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Email already exists in the system",
+                detail={
+                    "message": "Email already exists in the system",
+                    "is_deleted": conflicting_user.deleted_at is not None if conflicting_user else False,
+                },
             ) from None
 
     def update_user(self, user_id: int, payload: UserUpdate):
@@ -63,9 +73,13 @@ class UserService:
         except IntegrityError:
             # กรณีแก้ไขแล้วชน email เดิมของ user คนอื่น
             self.repository.db.rollback()
+            conflicting_user = self.repository.get_by_email(email=payload.email)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Email already exists in the system",
+                detail={
+                    "message": "Email already exists in the system",
+                    "is_deleted": conflicting_user.deleted_at is not None if conflicting_user else False,
+                },
             ) from None
 
     def delete_user(self, user_id: int):
@@ -81,10 +95,13 @@ class UserService:
         normalized_email = email.strip().lower()
         user = self.repository.get_by_email(email=normalized_email)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"message": "User not found"},
+            )
         if user.deleted_at is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="User is not deleted",
+                detail={"message": "User is not deleted"},
             )
         return self.repository.restore_user(user)

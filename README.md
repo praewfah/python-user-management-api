@@ -89,13 +89,33 @@ uvicorn app.main:app --reload
 ## Restore Behavior
 
 - restore สำเร็จผ่าน `POST /api/user/restore?email={email}`: คืนข้อมูล user เดิม
-- ไม่พบ email ในระบบ: `404 User not found`
-- พบ user แต่ยังไม่ถูกลบ: `409 User is not deleted`
+- ไม่พบ email ในระบบ: `404` พร้อม `{"detail": {"message": "User not found"}}`
+- พบ user แต่ยังไม่ถูกลบ: `409` พร้อม `{"detail": {"message": "User is not deleted"}}`
 
 ## Error Handling
 
 - `422` invalid input
-- `409` duplicate email
+- `409` duplicate email:
+
+```json
+{
+  "detail": {
+    "message": "Email already exists in the system",
+    "is_deleted": true
+  }
+}
+```
+
+- `404` not found:
+
+```json
+{
+  "detail": {
+    "message": "User not found"
+  }
+}
+```
+
 - `500` unexpected error:
 
 ```json
@@ -128,9 +148,15 @@ python3 -m pytest -q
 
 - ใช้ layered architecture (`route -> service -> repository`) + Dependency Injection เพื่อแยก concern ชัดและรองรับการทดสอบ
 - ออกแบบ validation แบบ fail-fast ใน schema (`StrictInt`, regex email, sanitize input) และ normalize email ก่อนเข้าฐานข้อมูล
-- รองรับ concurrency เรื่อง email ซ้ำด้วย DB unique constraint + จัดการ `IntegrityError` ให้เป็น `409 Conflict`
+- ป้องกัน email ซ้ำแบบ 2 ชั้นใน `create/update`: pre-check (`get_by_email`) เพื่อคืนข้อความที่อ่านง่าย/มี metadata เช่น `is_deleted` และ DB-level guard (`UNIQUE` + `IntegrityError`) เพื่อกัน race condition
 - คุม performance ของ search/pagination: minimum query length, field projection (`load_only`), และมี index strategy สำหรับ PostgreSQL
 - จัด API contract ให้ frontend-friendly ด้วย pagination metadata (`items`, `total`, `page`, `total_pages`)
+
+## Duplicate Email Strategy
+
+- ใช้ `if existing_user` เป็น pre-check เพื่อ fail fast และคืน `409` ที่มีรายละเอียดเชิงธุรกิจได้ทันที เช่น `detail.is_deleted`
+- ยังต้องมี `try/except IntegrityError` เสมอ เพราะ pre-check อย่างเดียวกัน concurrency ไม่ได้ (มีโอกาสชนกันตอน insert/update พร้อมกัน)
+- สรุป: pre-check ช่วยเรื่อง UX/ความชัดเจนของ response, ส่วน `IntegrityError` คือ safety net ด่านสุดท้ายด้านความถูกต้องของข้อมูล
 
 ## Demo
 
